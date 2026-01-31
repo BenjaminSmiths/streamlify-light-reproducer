@@ -1,0 +1,21 @@
+# Dependencies
+node_modules/
+
+# Next.js build output
+.next/
+out/
+
+# Environment files (users copy .env.example to .env.local)
+.env.local
+!.env.example
+
+# Lock files (users generate their own)
+yarn.lock
+package-lock.json
+
+# TypeScript
+*.tsbuildinfo
+next-env.d.ts
+
+# OS files
+.DS_Store

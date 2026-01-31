@@ -1,0 +1,25 @@
+[package]
+name = "light_nft_reproducer"
+version = "0.1.0"
+description = "Minimal reproducer for Light Protocol V2 CPI calls"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib", "lib"]
+
+[features]
+default = []
+cpi = ["no-entrypoint"]
+no-entrypoint = []
+idl-build = ["anchor-lang/idl-build"]
+
+[dependencies]
+# Use anchor 0.32.1 to match main project
+anchor-lang = { version = "0.32.1", features = ["init-if-needed"] }
+anchor-spl = { version = "0.32.1", features = ["token_2022"] }
+
+# Light Protocol V2 - MUST include both features for CPI
+light-sdk = { version = "0.16.0", features = ["v2", "cpi-context"] }
+light-sdk-types = "0.16.0"
+light-hasher = "5.0.0"
+light-compressed-account = "0.6.2"
