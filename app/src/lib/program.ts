@@ -294,14 +294,15 @@ export async function createCompressedNFT(
 
     log('Building transaction with validity proof...', 'info');
 
-    // Remaining accounts indices (V2 CORRECT ORDER):
-    // [0] Light System Program, [1] Fee Payer, [2] CPI Authority, [3] Registered PDA,
-    // [4] Compression Auth, [5] Compression Program, [6] System Program,
-    // [7] State Tree, [8] Address Tree, [9] Output Queue
-    const ADDRESS_TREE_ACCOUNT_INDEX = 8;
-    const OUTPUT_QUEUE_INDEX = 9;  // V2 batch trees: output queue for state writes
-    log(`Address tree account index: ${ADDRESS_TREE_ACCOUNT_INDEX}`, 'debug');
-    log(`Output queue index: ${OUTPUT_QUEUE_INDEX}`, 'debug');
+    // Packed account indices (RELATIVE to the packed section, after 7 system accounts):
+    // System accounts [0-6]: Light System Program, Fee Payer, CPI Authority,
+    //   Registered PDA, Compression Auth, Compression Program, System Program
+    // Packed accounts (indices start at 0):
+    //   [0] State Tree, [1] Address Tree, [2] Output Queue
+    const ADDRESS_TREE_ACCOUNT_INDEX = 1;  // Packed index, not absolute
+    const OUTPUT_QUEUE_INDEX = 2;  // Packed index, not absolute
+    log(`Address tree packed index: ${ADDRESS_TREE_ACCOUNT_INDEX}`, 'debug');
+    log(`Output queue packed index: ${OUTPUT_QUEUE_INDEX}`, 'debug');
 
     // Build instruction data with proof
     const data = await buildInstructionData(

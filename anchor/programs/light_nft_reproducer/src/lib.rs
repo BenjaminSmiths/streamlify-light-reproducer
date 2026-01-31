@@ -90,19 +90,19 @@ pub mod light_nft_reproducer {
         // Create new address parameters with proper tree configuration
         // For V2 batch address trees:
         // - address_queue_account_index = 0 signals "integrated queue" (V2 pattern)
-        // - address_merkle_tree_account_index is ABSOLUTE 0-indexed in remaining_accounts
-        //   Address Tree at remaining_accounts[8]
-        let address_tree_absolute_index = 8u8;  // Absolute index in remaining_accounts
+        // - Indices are RELATIVE to the packed accounts section (after the 7 system accounts)
+        //   Packed index 0 = State Tree, 1 = Address Tree, 2 = Output Queue
+        let address_tree_packed_index = 1u8;  // Relative index in packed accounts
         let new_address_params = NewAddressParamsAssignedPacked {
             seed: address_seed,
             address_queue_account_index: 0,  // V2: 0 = integrated queue
-            address_merkle_tree_account_index: address_tree_absolute_index,
+            address_merkle_tree_account_index: address_tree_packed_index,
             address_merkle_tree_root_index: address_tree_root_index,
             assigned_to_account: false,               // Not assigned to existing account
             assigned_account_index: 0,                // N/A since not assigned
         };
-        msg!("Address params: root_index={}, tree_index={} (absolute), queue=0 (integrated), seed={:?}",
-             address_tree_root_index, address_tree_absolute_index, &address_seed[..8]);
+        msg!("Address params: root_index={}, tree_index={} (packed), queue=0 (integrated), seed={:?}",
+             address_tree_root_index, address_tree_packed_index, &address_seed[..8]);
 
         // Prepare NFT registry data
         let mut owner_bytes = [0u8; 32];
@@ -120,15 +120,15 @@ pub mod light_nft_reproducer {
         let uri_hash = hash_to_32_bytes(uri.as_bytes());
 
         // Initialize Light Account for the NFT registry
-        // output_tree_index is ABSOLUTE 0-indexed in remaining_accounts
-        // Output Queue at remaining_accounts[9]
-        let output_queue_absolute_index = 9u8;
+        // output_tree_index is RELATIVE to the packed accounts section
+        // Packed index 2 = Output Queue
+        let output_queue_packed_index = 2u8;
         let mut registry = LightAccount::<NFTRegistry>::new_init(
             &crate::ID,
             None, // Address derived by Light Protocol
-            output_queue_absolute_index,
+            output_queue_packed_index,
         );
-        msg!("Output queue index: {} (absolute)", output_queue_absolute_index);
+        msg!("Output queue index: {} (packed)", output_queue_packed_index);
         registry.owner = owner_bytes;
         registry.name = name_bytes;
         registry.symbol = symbol_bytes;
@@ -163,8 +163,10 @@ pub mod light_nft_reproducer {
 /// Accounts for creating a compressed NFT
 ///
 /// The key insight for V2 CPI is that remaining_accounts MUST be in the correct order:
-/// [0] light_system_program (CPI target), [1] fee_payer, [2] cpi_authority, [3] registered_pda,
-/// [4] compression_auth, [5] compression_program, [6] system_program, [7+] trees...
+/// System accounts: [0] light_system_program, [1] fee_payer, [2] cpi_authority, [3] registered_pda,
+///   [4] compression_auth, [5] compression_program, [6] system_program
+/// Packed accounts (indices are RELATIVE to this section):
+///   [0] state_tree, [1] address_tree, [2] output_queue
 #[derive(Accounts)]
 pub struct CreateCompressedNFT<'info> {
     /// The user creating the NFT (pays for transaction)

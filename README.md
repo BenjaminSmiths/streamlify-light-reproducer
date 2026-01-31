@@ -484,6 +484,24 @@ Request an airdrop:
 solana airdrop 2
 ```
 
+### 8. Packed Index Fix (From Light Protocol Team Feedback)
+**Feedback:** The Light Protocol team confirmed our account order is correct, but pointed out that tree indices must be **relative to the packed accounts section**, not absolute indices into `remaining_accounts`.
+
+The system accounts occupy positions [0-6]. The packed accounts start after that, so:
+| Account | Absolute Index | Packed Index (what Light expects) |
+|---------|---------------|-----------------------------------|
+| State Tree (bmt1) | 7 | **0** |
+| Address Tree (amt2) | 8 | **1** |
+| Output Queue (oq1) | 9 | **2** |
+
+**Changes made:**
+- `lib.rs`: `address_tree_absolute_index = 8u8` → `address_tree_packed_index = 1u8`
+- `lib.rs`: `output_queue_absolute_index = 9u8` → `output_queue_packed_index = 2u8`
+- `program.ts`: `ADDRESS_TREE_ACCOUNT_INDEX = 8` → `1`
+- `program.ts`: `OUTPUT_QUEUE_INDEX = 9` → `2`
+
+**Result:** Same System Program writable escalation error persists. The index fix was correct but the root cause is elsewhere — the CPI invoke still tries to escalate `11111111111111111111111111111111` to writable.
+
 ---
 
 ## Key Findings from DeepWiki Analysis
