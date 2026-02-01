@@ -59,18 +59,18 @@ export function deriveRegisteredProgramPda(programId: PublicKey): PublicKey {
 /**
  * Build the remaining_accounts array in V2 ORDER
  *
- * CRITICAL: The order matters! This was the root cause of the
- * "signer privilege escalated" error.
+ * CRITICAL: Fee payer is NOT included here — it's passed separately
+ * as the first arg to CpiAccounts::new() on-chain. Including it in
+ * remaining_accounts shifts all indices by 1.
  *
- * V2 Required Order (CpiAccounts::new() expects):
- * [0] Light System Program (CPI target - must be present for invoke!)
- * [1] Fee Payer (signer, writable)
- * [2] CPI Authority PDA (read-only)
- * [3] Registered Program PDA (read-only)
- * [4] Account Compression Authority (read-only)
- * [5] Account Compression Program (read-only)
- * [6] System Program (read-only) - NEVER writable!
- * [7+] Tree accounts (writable)
+ * V2 Required Order (CpiAccounts::new() remaining_accounts):
+ * [0] Light System Program (CPI target)
+ * [1] CPI Authority PDA (read-only)
+ * [2] Registered Program PDA (read-only)
+ * [3] Account Compression Authority (read-only)
+ * [4] Account Compression Program (read-only)
+ * [5] System Program (read-only)
+ * [6+] Tree accounts (writable) — packed indices start here
  */
 export function buildV2RemainingAccounts(
   feePayer: PublicKey,
@@ -79,79 +79,65 @@ export function buildV2RemainingAccounts(
   const cpiAuthority = deriveCpiAuthority(programId);
   const registeredProgramPda = deriveRegisteredProgramPda(programId);
 
-  // V2 REQUIRED ORDER - DO NOT REORDER!
+  // V2 REQUIRED ORDER - Fee payer is passed separately, NOT here
   const accounts: AccountMeta[] = [
-    // [0] Light System Program - CPI target, must be present!
+    // [0] Light System Program - CPI target
     {
       pubkey: LIGHT_SYSTEM_PROGRAM,
       isSigner: false,
       isWritable: false,
     },
 
-    // [1] Fee Payer (signer, writable)
-    {
-      pubkey: feePayer,
-      isSigner: true,
-      isWritable: true,
-    },
-
-    // [2] CPI Authority PDA
-    // The program's PDA that signs the CPI call
+    // [1] CPI Authority PDA
     {
       pubkey: cpiAuthority,
-      isSigner: false, // PDA signing handled by Light SDK
+      isSigner: false,
       isWritable: false,
     },
 
-    // [3] Registered Program PDA
-    // Proves the program is registered with Light Protocol
+    // [2] Registered Program PDA
     {
       pubkey: registeredProgramPda,
       isSigner: false,
       isWritable: false,
     },
 
-    // [4] Account Compression Authority
-    // Light Protocol's authority for compression operations
+    // [3] Account Compression Authority
     {
       pubkey: ACCOUNT_COMPRESSION_AUTHORITY,
       isSigner: false,
       isWritable: false,
     },
 
-    // [5] Account Compression Program
-    // The compression program that manages state trees
+    // [4] Account Compression Program
     {
       pubkey: ACCOUNT_COMPRESSION_PROGRAM,
       isSigner: false,
       isWritable: false,
     },
 
-    // [6] System Program (read-only - NEVER writable!)
+    // [5] System Program (read-only)
     {
       pubkey: SYSTEM_PROGRAM,
       isSigner: false,
       isWritable: false,
     },
 
-    // [7] State Tree (V2 Batch)
-    // Where compressed account data is stored
+    // [6] State Tree (V2 Batch)
     {
       pubkey: STATE_TREE,
       isSigner: false,
       isWritable: true,
     },
 
-    // [8] Address Tree (V2 Batch)
-    // Where compressed account addresses are indexed
+    // [7] Address Tree (V2 Batch)
     {
       pubkey: ADDRESS_TREE,
       isSigner: false,
       isWritable: true,
     },
 
-    // [9] Output Queue
-    // Queue for batched outputs
+    // [8] Output Queue
     {
       pubkey: OUTPUT_QUEUE,
       isSigner: false,
@@ -169,15 +155,14 @@ export function logRemainingAccounts(accounts: AccountMeta[]): void {
   console.log('=== V2 Remaining Accounts ===');
   const labels = [
     'Light System Program',  // [0] - CPI target
-    'Fee Payer',             // [1]
-    'CPI Authority',         // [2]
-    'Registered PDA',        // [3]
-    'Compression Auth',      // [4]
-    'Compression Program',   // [5]
-    'System Program',        // [6]
-    'State Tree',            // [7]
-    'Address Tree',          // [8]
-    'Output Queue',          // [9]
+    'CPI Authority',         // [1]
+    'Registered PDA',        // [2]
+    'Compression Auth',      // [3]
+    'Compression Program',   // [4]
+    'System Program',        // [5]
+    'State Tree',            // [6]
+    'Address Tree',          // [7]
+    'Output Queue',          // [8]
   ];
 
   accounts.forEach((acc, i) => {

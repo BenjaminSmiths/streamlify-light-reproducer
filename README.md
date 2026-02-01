@@ -500,47 +500,76 @@ The system accounts occupy positions [0-6]. The packed accounts start after that
 - `program.ts`: `ADDRESS_TREE_ACCOUNT_INDEX = 8` → `1`
 - `program.ts`: `OUTPUT_QUEUE_INDEX = 9` → `2`
 
-**Result:** Same System Program writable escalation error persists. The index fix was correct but the root cause is elsewhere — the CPI invoke still tries to escalate `11111111111111111111111111111111` to writable.
+**Result:** Same System Program writable escalation error persists. The index fix was correct but not sufficient — the fee payer duplication was the real cause (see Step 9).
+
+### 9. Remove Duplicate Fee Payer from remaining_accounts
+**Feedback:** The fee payer was being passed **twice** — once as the first argument to `CpiAccounts::new(ctx.accounts.user.as_ref(), ...)` and again as `remaining_accounts[1]`. This shifted every account index by 1, causing the SDK to treat the System Program slot as writable.
+
+**Fix:** Removed fee payer from `remaining_accounts` in `light-accounts.ts`. New layout (9 accounts instead of 10):
+
+| Index | Account | Writable |
+|-------|---------|----------|
+| 0 | Light System Program | false |
+| 1 | CPI Authority PDA | false |
+| 2 | Registered Program PDA | false |
+| 3 | Account Compression Authority | false |
+| 4 | Account Compression Program | false |
+| 5 | System Program | false |
+| 6 | State Tree (bmt1) | true |
+| 7 | Address Tree (amt2) | true |
+| 8 | Output Queue (oq1) | true |
+
+**Result:** System Program writable escalation error is **GONE**. The CPI now successfully invokes the Light System Program in V2 mode. New error: `0x179b` (ProofVerificationFailed).
+
+### 10. Current Blocker — ProofVerificationFailed (0x179b / 6043)
+
+The CPI plumbing is now fully working. The Light System Program receives and processes our call in V2 mode, logs the proof data, then fails at ZK proof verification.
+
+**Error:** `custom program error: 0x179b` (decimal 6043 = `ProofVerificationFailed`)
+
+**Logs from Light System Program (successful CPI invoke):**
+```
+Program SySTEM1eSU2p4BGQfQpimFEWWSC1XDFeun3Nqzz3rT7 invoke [2]
+Program log: invoke_cpi_with_account_info
+Program log: mode V2
+Program log: proof  Ref(CompressedProof { a: [...], b: [...], c: [...] })
+Program log: new_address_roots [[0, 119, 111, 126, ...]]
+Program log: new_addresses [[0, 110, 155, 28, ...]]
+Program SySTEM1eSU2p4BGQfQpimFEWWSC1XDFeun3Nqzz3rT7 consumed 152631 of 443884 compute units
+Program SySTEM1eSU2p4BGQfQpimFEWWSC1XDFeun3Nqzz3rT7 failed: custom program error: 0x179b
+```
+
+**What's working now:**
+- Account ordering is correct (9 remaining_accounts, fee payer separate)
+- Packed indices are correct (0=state tree, 1=address tree, 2=output queue)
+- CPI invocation succeeds — Light System Program processes the call
+- Proof data is received and parsed correctly
+
+**Likely cause:** Mismatch between the address derivation on the client side and what the on-chain verifier expects. The client uses `hashvToBn254FieldSizeBe([seed, tree, programId])` to derive the address, and passes this to `getValidityProofV0`. The proof verifier may expect different inputs or ordering.
 
 ---
 
-## Key Findings from DeepWiki Analysis
+## Questions for Light Protocol Team
 
-1. **SDK explicitly marks System Program as read-only:**
-   In `sdk-libs/sdk/src/cpi/v2/accounts.rs`, the `to_account_metas` function sets `is_writable: false` for System Program.
+1. **Is the address derivation correct?**
+   We use `hashvToBn254FieldSizeBe([seed, treeBytes, programIdBytes])` — is this the correct V2 derivation for `NewAddressParamsAssignedPacked`?
 
-2. **Error happens during CPI invoke:**
-   The error occurs when our program invokes the Light System Program, which then internally tries to escalate System Program's privileges.
+2. **Should the proof inputs include the output account hash?**
+   We pass `new_addresses` but no `input_compressed_accounts_with_merkle_context` (empty `[]`). Does proof verification require the output account data to be included in the proof?
 
-3. **Test infrastructure is different:**
-   Light Protocol tests use `LightProgramTest`, `TestIndexer`, and special mock accounts that may configure accounts differently than devnet.
-
-4. **Possible SDK bug or version mismatch:**
-   The SDK might have an issue with V2 CPI when creating new addresses, or we need a different version.
+3. **Is there a working V2 CPI example with `getValidityProofV0`?**
+   We need to confirm the exact proof request format for creating new addresses via CPI.
 
 ---
 
-## Request for Help
+## Progress Summary
 
-We've built a complete, minimal reproducer demonstrating this issue. We need help from the Light Protocol team to understand:
-
-1. Is this a known limitation or bug?
-2. Is there a workaround?
-3. What SDK version/configuration is required?
-
-### Recommended Next Steps
-
-**Option A: File GitHub Issue**
-File at https://github.com/Lightprotocol/light-protocol with this reproducer.
-
-**Option B: Use TypeScript SDK Directly**
-Skip custom Anchor CPI and use `@lightprotocol/stateless.js` SDK functions directly.
-
-**Option C: Try Without New Addresses**
-Create compressed accounts WITHOUT `with_new_addresses()` - let Light Protocol assign addresses automatically.
-
-**Option D: Reach Out on Discord**
-https://discord.gg/lightprotocol - share reproducer for direct debugging.
+| Step | Issue | Status |
+|------|-------|--------|
+| 1-4 | Account ordering (signer privilege escalation) | FIXED |
+| 8 | Packed indices (absolute vs relative) | FIXED |
+| 9 | Duplicate fee payer in remaining_accounts | FIXED |
+| 10 | ProofVerificationFailed (0x179b) | **CURRENT BLOCKER** |
 
 ---
 

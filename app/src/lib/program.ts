@@ -260,14 +260,13 @@ export async function createCompressedNFT(
     const remainingAccounts = buildV2RemainingAccounts(wallet.publicKey, PROGRAM_ID);
     logRemainingAccounts(remainingAccounts);
 
-    // Log the critical fix
-    log('V2 Account Order Applied (CORRECTED):', 'info');
+    // Log the account order (fee payer is separate, not in remaining_accounts)
+    log('V2 Account Order (fee payer passed separately):', 'info');
     log('  [0] Light System Program (CPI target)', 'success');
-    log('  [1] Fee Payer (signer, writable)', 'info');
-    log('  [2] CPI Authority PDA', 'info');
-    log('  [3] Registered Program PDA', 'info');
-    log('  [4-6] Compression Auth, Program & System', 'info');
-    log('  [7-9] Tree accounts (State, Address, Output)', 'info');
+    log('  [1] CPI Authority PDA', 'info');
+    log('  [2] Registered Program PDA', 'info');
+    log('  [3-5] Compression Auth, Program & System', 'info');
+    log('  [6-8] Tree accounts (State, Address, Output)', 'info');
 
     // Generate unique address seed for this NFT
     // V2: Create seed by hashing raw inputs (without programId)
@@ -294,8 +293,8 @@ export async function createCompressedNFT(
 
     log('Building transaction with validity proof...', 'info');
 
-    // Packed account indices (RELATIVE to the packed section, after 7 system accounts):
-    // System accounts [0-6]: Light System Program, Fee Payer, CPI Authority,
+    // Packed account indices (RELATIVE to the packed section, after 6 system accounts):
+    // System accounts [0-5]: Light System Program, CPI Authority,
     //   Registered PDA, Compression Auth, Compression Program, System Program
     // Packed accounts (indices start at 0):
     //   [0] State Tree, [1] Address Tree, [2] Output Queue
